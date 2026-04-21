@@ -1,3 +1,6 @@
+from operator import index
+from shlex import split
+
 from .ADS import Ads
 from .Apartness import Apartness
 from ... import Dfa, DfaState, MealyState, MealyMachine, MooreMachine, MooreState
@@ -24,7 +27,7 @@ class MooreNode:
         self.successors[input_val] = successor_node
         self.successors[input_val].output = output_val
 
-    def get_successor(self, input_val):
+    def get_successor(self, input_val, index):
         """ Returns the successor node for the given input """
         if input_val in self.successors:
             return self.successors[input_val]
@@ -83,9 +86,106 @@ class MealyNode:
                     f"observation not consistent with tree with output from tree: {out} and output from call: {output}")
             return self.successors[inp][1]
         successor_node = MealyNode(parent=self)
-        self.add_successor(inp, output, successor_node)
+        if self.successors == {}:
+            new_self = CompressedMealyNode([(self.id, self.parent.get_output(self.input_to_parent), inp), (successor_node.id, output, None)], self.parent)
+            self.parent[self.input_to_parent] = (self.parent.get_output(self.input_to_parent), new_self)
+            return new_self #@TODO hmmmm
+        else:
+            self.add_successor(inp, output, successor_node)
+            successor_node.input_to_parent = inp
+            return successor_node
+
+    @property
+    def id_counter(self):
+        return self._id_counter
+
+class CompressedMealyNode:
+    __slots__ = ['nodes', 'successors', 'parent', 'input_to_parent'] #nodes = (id, output of node, symbol to next node)
+
+    def __init__(self, nodes, parent=None):
+        self.nodes = nodes
+        self.successors = {}
+        self.parent = parent
+        self.input_to_parent = None
+
+    # def __hash__(self):
+    #     return hash(self.id)
+
+    def add_successor_middle(self, input_val, output_val, successor_node, index):
+        """ Adds a successor node to the middle of the compressed node based on input """
+        if len(self.nodes[index+1:]) > 1: #if there are multiple nodes after the split
+            split_node = CompressedMealyNode(self.nodes[index+1:], self)
+            split_node.successors = self.successors
+            self.successors = {}
+            self.successors[self.nodes[index][2]] = (self.nodes[-1][1], split_node)
+
+        else: #if there is only one node after the split
+            split_node = MealyNode(self)
+            MealyNode._id_counter -= 1
+            split_node.id = self.nodes[index+1][0]
+            split_node.input_to_parent = self.nodes[index][2]
+            split_node.successors = self.successors
+            self.successors = {}
+            self.successors[split_node.input_to_parent] = (self.nodes[index+1][1], split_node)
+        
+        self.nodes = self.nodes[:index+1]
+
+        if len(self.nodes)[:index+1] == 1: #if there is only one node before the split
+            new_self = MealyNode(self)
+            MealyNode._id_counter -= 1
+            new_self.id = self.nodes[0][0]
+            new_self.input_to_parent = self.input_to_parent
+            new_self.successors[input_val] = (output_val, successor_node)
+            self.parent[self.input_to_parent] = (self.parent.get_output(self.input_to_parent), new_self)
+        else:
+            self.nodes[-1] = (self.nodes[-1][0], self.nodes[-1][1], None)
+            self.successors[input_val] = (output_val, successor_node)
+
+    def add_sucessor_end(self, input_val, output_val, successor_node):
+        """ Adds a successor node to the end of the compressed node based on input """
+        if self.successors == {}:
+            self.nodes[-1] = (self.nodes[-1][0], self.nodes[-1][1], input_val)
+            self.nodes.append((successor_node.id, output_val, None))
+            return self
+        else:
+            self.successors[input_val] = (output_val, successor_node)
+            return successor_node
+
+    def get_successor(self, input_val, index):
+        """ Returns the successor node for the given input """
+        if index == len(self.nodes) - 1 and input_val in self.successors:
+            return self.successors[input_val][1]
+        elif input_val == self.nodes[index][2]:
+            return self #@TODO what exactly to return here, self or the tuple of the next node?
+        return None
+
+    def get_output(self, input_val, index):
+        """ Returns the output for the given input """
+        if index == len(self.nodes) - 1 and input_val in self.successors:
+            return self.successors[input_val][0]
+        elif input_val == self.nodes[index][2]:
+            return self.nodes[index+1][1]
+        return None
+
+    def extend_and_get(self, inp, output, index):
+        """ Extend the node with a new successor and return the successor node """
+        successor_node = MealyNode(parent=self)
         successor_node.input_to_parent = inp
-        return successor_node
+        
+        if index == len(self.nodes) - 1:
+            
+            if inp in self.successors:
+                out = self.successors[inp][0]
+                if out != output:
+                    raise Exception(
+                        f"observation not consistent with tree with output from tree: {out} and output from call: {output}")
+                return self.successors[inp][1]
+            else:
+                return self.add_sucessor_end(inp, output, successor_node)
+            
+        else:
+            self.add_successor(inp, output, successor_node, index)
+            return successor_node
 
     @property
     def id_counter(self):
