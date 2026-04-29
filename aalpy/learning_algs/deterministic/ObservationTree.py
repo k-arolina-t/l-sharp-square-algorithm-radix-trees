@@ -86,14 +86,15 @@ class MealyNode:
                     f"observation not consistent with tree with output from tree: {out} and output from call: {output}")
             return self.successors[inp][1]
         successor_node = MealyNode(parent=self)
-        if self.successors == {}:
-            new_self = CompressedMealyNode([(self.id, self.parent.get_output(self.input_to_parent), inp), (successor_node.id, output, None)], self.parent)
-            self.parent[self.input_to_parent] = (self.parent.get_output(self.input_to_parent), new_self)
-            return new_self #@TODO hmmmm
-        else:
-            self.add_successor(inp, output, successor_node)
-            successor_node.input_to_parent = inp
-            return successor_node
+        if self.successors == {} and self.parent is not None:
+            if (self.parent.successors) == 1 and self.parent.parent is not None:
+                new_self = CompressedMealyNode([(self.parent.id, self.parent.parent.get_output(self.parent.input_to_parent), self.input_to_parent), (self.id, self.parent.get_output(self.input_to_parent), inp), (successor_node.id, output, None)], self.parent)
+                new_self.input_to_parent = self.parent.input_to_parent
+                self.parent.parent[self.parent.input_to_parent] = (self.parent.parent.get_output(self.parent.input_to_parent), new_self)
+                return new_self
+        self.add_successor(inp, output, successor_node)
+        successor_node.input_to_parent = inp
+        return successor_node
 
     @property
     def id_counter(self):
@@ -117,6 +118,7 @@ class CompressedMealyNode:
             split_node = CompressedMealyNode(self.nodes[index+1:], self)
             split_node.successors = self.successors
             self.successors = {}
+            split_node.input_to_parent = self.nodes[index][2]
             self.successors[self.nodes[index][2]] = (self.nodes[-1][1], split_node)
 
         else: #if there is only one node after the split
@@ -130,13 +132,14 @@ class CompressedMealyNode:
         
         self.nodes = self.nodes[:index+1]
 
-        if len(self.nodes)[:index+1] == 1: #if there is only one node before the split
+        if len(self.nodes[:index+1]) == 1: #if there is only one node before the split
             new_self = MealyNode(self)
             MealyNode._id_counter -= 1
             new_self.id = self.nodes[0][0]
             new_self.input_to_parent = self.input_to_parent
             new_self.successors[input_val] = (output_val, successor_node)
-            self.parent[self.input_to_parent] = (self.parent.get_output(self.input_to_parent), new_self)
+            if self.parent is not None:
+                self.parent[self.input_to_parent] = (self.parent.get_output(self.input_to_parent), new_self)
         else:
             self.nodes[-1] = (self.nodes[-1][0], self.nodes[-1][1], None)
             self.successors[input_val] = (output_val, successor_node)
@@ -156,7 +159,7 @@ class CompressedMealyNode:
         if index == len(self.nodes) - 1 and input_val in self.successors:
             return self.successors[input_val][1]
         elif input_val == self.nodes[index][2]:
-            return self #@TODO what exactly to return here, self or the tuple of the next node?
+            return self
         return None
 
     def get_output(self, input_val, index):
@@ -186,11 +189,42 @@ class CompressedMealyNode:
         else:
             self.add_successor(inp, output, successor_node, index)
             return successor_node
+        
+    def get_input_to_parent(self, index):
+        """ Returns the input to the parent for the given index """
+        if index == 0: return self.input_to_parent
+        else: return self.nodes[index-1][2]
 
-    @property
-    def id_counter(self):
-        return self._id_counter
+    def get_parent(self, index):
+        """ Returns the parent for the given index """
+        if index == 0: return self.parent
+        else: return self
 
+    def uncompress_node_at_index(self,index):
+        """ Uncompresses the node at the given index and returns that node """
+        uncompressed_node = MealyNode(self.get_parent(index))
+        uncompressed_node.id = self.nodes[index][0]
+        uncompressed_node.input_to_parent = self.get_input_to_parent(index)
+        
+        if index < len(self.nodes) - 1:
+            if len(self.nodes[index+1:]) > 1: #if there are multiple nodes after the split
+                successor_node = CompressedMealyNode(self.nodes[index+1:], uncompressed_node)
+                successor_node.successors = self.successors
+                uncompressed_node.successors = {}
+                successor_node.input_to_parent = self.nodes[index][2]
+                
+            else: #if there is only one node after the split
+                successor_node = MealyNode(uncompressed_node)
+                MealyNode._id_counter -= 1
+                successor_node.id = self.nodes[index+1][0]
+                successor_node.input_to_parent = self.nodes[index][2]
+            uncompressed_node.successors[self.nodes[index][2]] = (self.nodes[-1][1], successor_node)
+        else:
+            uncompressed_node.successors = self.successors
+        self.successors = {}
+        self.successors[uncompressed_node.input_to_parent] = (self.nodes[index][1], uncompressed_node)
+        self.nodes = self.nodes[:index]
+        return uncompressed_node
 
 class ObservationTree:
     def __init__(self, alphabet, sul, automaton_type, extension_rule, separation_rule):
@@ -226,19 +260,31 @@ class ObservationTree:
         # Insert an observation into the tree using sequences of inputs and outputs
         if len(inputs) != len(outputs):
             raise ValueError("Inputs and outputs must have the same length.")
-
         current_node = self.root
+        counter = 0
         for input_val, output_val in zip(inputs, outputs):
-            current_node = current_node.extend_and_get(input_val, output_val)
+            if type(current_node) == CompressedMealyNode:
+                current_node = current_node.extend_and_get(input_val, output_val, counter)
+                counter += 1
+            else:
+                counter = 0
+                current_node = current_node.extend_and_get(input_val, output_val)
 
     def get_observation(self, inputs):
         # Retrieve the list of outputs based on a given input sequence
         current_node = self.root
         observation = []
+        counter = 0
         for input_val in inputs:
             if self.automaton_type == 'mealy':
-                output = current_node.get_output(input_val)
-                current_node = current_node.get_successor(input_val)
+                if type(current_node) == CompressedMealyNode:
+                    output = current_node.get_output(input_val, index)
+                    current_node = current_node.get_successor(input_val, index)
+                    index += 1
+                else:
+                    index = 0
+                    output = current_node.get_output(input_val)
+                    current_node = current_node.get_successor(input_val)
             else:
                 current_node = current_node.get_successor(input_val)
                 output = current_node.output
@@ -252,9 +298,15 @@ class ObservationTree:
         prefix = self.get_transfer_sequence(self.root, basis_state)
         current_node = self.get_successor(prefix)
         observation = []
+        counter = 0
         for input_val in inputs:
             if self.automaton_type == 'mealy':
-                output = current_node.get_output(input_val)
+                if type(current_node) == CompressedMealyNode:
+                    output = current_node.get_output(input_val, index)
+                    counter += 1
+                else:
+                    counter = 0
+                    output = current_node.get_output(input_val)
             else:
                 output = current_node.output
             if output is None:
@@ -267,24 +319,56 @@ class ObservationTree:
     def get_successor(self, inputs):
         # Retrieve the node (subtree) corresponding to the given input sequence
         current_node = self.root
+        counter = 0
         for input_val in inputs:
-            successor_node = current_node.get_successor(input_val)
+            if type(current_node) == CompressedMealyNode:
+                current_node = current_node.get_successor(input_val, counter)
+                counter += 1
+            else:
+                counter = 0
+                successor_node = current_node.get_successor(input_val)
             if successor_node is None:
                 return None
             current_node = successor_node
-
         return current_node
+    
+    def get_successor_index(self, inputs):
+        # Retrieve the node (subtree) corresponding to the given input sequence
+        current_node = self.root
+        counter = 0
+        for input_val in inputs:
+            if type(current_node) == CompressedMealyNode:
+                current_node = current_node.get_successor(input_val, counter)
+                counter += 1
+            else:
+                counter = 0
+                successor_node = current_node.get_successor(input_val)
+            if successor_node is None:
+                return None
+            current_node = successor_node
+        if type(current_node) != CompressedMealyNode:
+            counter = None
+        return (current_node, counter)
 
     def get_transfer_sequence(self, from_node, to_node):
         # Get the transfer sequence (inputs) that moves from one node to another
         transfer_sequence = []
         current_node = to_node
+        counter = -1
 
         while current_node != from_node:
-            if current_node.parent is None:
-                return None
-            transfer_sequence.append(current_node.input_to_parent)
-            current_node = current_node.parent
+            if type(current_node) == CompressedMealyNode:
+                if counter == -1:
+                    counter = len(current_node.nodes) - 1
+                transfer_sequence.append(current_node.get_input_to_parent(counter))
+                current_node = current_node.get_parent(counter)
+                counter -= 1
+            else:
+                counter = -1
+                if current_node.parent is None:
+                    return None
+                transfer_sequence.append(current_node.input_to_parent)
+                current_node = current_node.parent
 
         transfer_sequence.reverse()
         return transfer_sequence
@@ -293,12 +377,21 @@ class ObservationTree:
         # Get the transfer sequence (inputs) that moves from one node to another
         transfer_sequence = []
         current_node = to_node
+        counter = -1
 
         while current_node != self.root:
-            if current_node.parent is None:
-                return None
-            transfer_sequence.append(current_node.input_to_parent)
-            current_node = current_node.parent
+            if type(current_node) == CompressedMealyNode:
+                if counter == -1:
+                    counter = len(current_node.nodes) - 1
+                transfer_sequence.append(current_node.get_input_to_parent(counter))
+                current_node = current_node.get_parent(counter)
+                counter -= 1
+            else:
+                counter = -1
+                if current_node.parent is None:
+                    return None
+                transfer_sequence.append(current_node.input_to_parent)
+                current_node = current_node.parent
 
         transfer_sequence.reverse()
         return tuple(transfer_sequence)
@@ -361,8 +454,13 @@ class ObservationTree:
         for basis_state in self.basis:
             for i in self.alphabet:
                 maybe_frontier = basis_state.get_successor(i)
+                if type(maybe_frontier) == CompressedMealyNode:
+                    maybe_frontier = maybe_frontier.uncompress_node_at_index(0)
+                    
                 if maybe_frontier is None or maybe_frontier in self.basis or maybe_frontier in self.frontier_to_basis_dict:
                     continue
+                
+                
 
                 self.frontier_to_basis_dict[maybe_frontier] = [
                     new_basis_state for new_basis_state in self.basis
@@ -370,8 +468,10 @@ class ObservationTree:
                 ]
 
     def is_observation_tree_adequate(self):
-        # Check if the frontier state have only 1 basis candidate, and if all basis
-        # states have some output for every input.
+        """
+        Check if the frontier state have only 1 basis candidate, and if all basis
+        states have some output for every input.
+        """
         self.check_frontier_consistency()
         for _, basis_list in self.frontier_to_basis_dict.items():
             if len(basis_list) != 1:
@@ -421,6 +521,8 @@ class ObservationTree:
             basis_two = next(iterator)
             if basis_two == basis_state:
                 basis_two = next(iterator)
+            if type(basis_two) == CompressedMealyNode:
+                basis_two = basis_two.uncompress_node_at_index(0)
             witness = self.get_or_compute_witness(basis_state, basis_two)
             inputs = self.get_transfer_sequence(self.root, basis_state)
             inputs.append(inp)
@@ -478,7 +580,7 @@ class ObservationTree:
                 successor_from_node = current_node.get_successor(next_input)
                 if successor_from_node is None:
                     return None, None
-                output_from_node = successor_from_node.output
+                output_from_node = successor_from_node.output 
 
             prev_output = output_from_node
             outputs_received.append(output_from_node)
@@ -575,6 +677,8 @@ class ObservationTree:
             for input_val in self.alphabet:
                 # set transition
                 successor = basis_state.get_successor(input_val)
+                if type(successor) == CompressedMealyNode:
+                    successor = successor.uncompress_node_at_index(0)
                 if successor in self.frontier_to_basis_dict:
                     # set successor for frontier state
                     candidates = self.frontier_to_basis_dict[successor]
@@ -629,6 +733,7 @@ class ObservationTree:
     # Counterexample Processing
 
     def process_counter_example(self, hypothesis, cex_inputs, cex_outputs):
+        
         """
         Inserts the counter example into the observation tree and searches for the
         input-output sequence which is different
@@ -652,7 +757,9 @@ class ObservationTree:
         """
         use binary search on the counter example to compute a witness between the real system and the hypothesis
         """
-        tree_node = self.get_successor(cex_inputs)
+        tree_node = self.get_successor_index(cex_inputs)
+        if tree_node[1] is not None:
+            tree_node = tree_node[0].uncompress_node_at_index(tree_node[1])
         self.update_frontier_and_basis()
 
         if tree_node in self.frontier_to_basis_dict or tree_node in self.basis:
@@ -665,10 +772,16 @@ class ObservationTree:
 
         prefix = []
         current_state = self.root
+        counter = 0
         for input in cex_inputs:
             if current_state in self.frontier_to_basis_dict:
                 break
-            current_state = current_state.get_successor(input)
+            if type(current_state) == CompressedMealyNode:
+                current_state = current_state.get_successor(input, counter)
+                counter += 1
+            else:
+                counter = 0
+                current_state = current_state.get_successor(input)
             prefix.append(input)
 
         h = (len(prefix) + len(cex_inputs)) // 2
@@ -690,7 +803,9 @@ class ObservationTree:
 
         self.insert_observation(query_inputs, query_outputs)
 
-        tree_node_p = self.get_successor(sigma1)
+        tree_node_p = self.get_successor_index(sigma1)
+        if tree_node_p[1] is not None:
+            tree_node_p = tree_node_p[0].uncompress_node_at_index(tree_node_p[1])
 
         witness_p = Apartness.compute_witness(tree_node_p, hyp_node_p, self)
 
