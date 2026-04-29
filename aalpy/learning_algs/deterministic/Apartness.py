@@ -27,10 +27,12 @@ class Apartness:
     def _show_states_are_apart_mealy(first, second, alphabet):
         # Identifies if two states can be distinguished by any input-output pair in the provided alphabet
         pairs = deque([(first, second)])
+        if type(first) == tuple: print(first)
 
         while pairs:
             first_node, second_node = pairs.popleft()
             for input_val in alphabet:
+                if type(first_node) == tuple: print(first_node)
                 first_output = first_node.get_output(input_val)
                 second_output = second_node.get_output(input_val)
 

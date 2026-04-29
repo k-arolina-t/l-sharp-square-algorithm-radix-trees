@@ -21,6 +21,29 @@ def random_deterministic_model_example():
     assert learned_model == random_model
     return learned_model
 
+def random_deterministic_model_example_lsharp():
+    from aalpy.utils import generate_random_deterministic_automata
+    from aalpy.SULs import AutomatonSUL
+    from aalpy.oracles import RandomWMethodEqOracle
+    from aalpy.learning_algs import run_Lsharp
+
+    model_type = 'mealy'  # or 'moore', 'dfa'
+
+    # for random dfa's you can also define num_accepting_states
+    random_model = generate_random_deterministic_automata(automaton_type=model_type, num_states=100,
+                                                          input_alphabet_size=3, output_alphabet_size=4)
+
+    sul = AutomatonSUL(random_model)
+    input_alphabet = random_model.get_input_alphabet()
+
+    # select any of the oracles
+    eq_oracle = RandomWMethodEqOracle(input_alphabet, sul, walks_per_state=10, walk_len=20)
+
+    learned_model = run_Lsharp(input_alphabet, sul, eq_oracle, model_type, separation_rule="SepSeq")
+
+    assert learned_model == random_model
+    return learned_model
+
 
 def angluin_seminal_example():
     """
