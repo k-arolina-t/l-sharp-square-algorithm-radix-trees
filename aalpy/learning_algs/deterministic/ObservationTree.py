@@ -84,22 +84,40 @@ class MealyNode:
     def extend_and_get(self, inp, output, basis, frontier):
         """ Extend the node with a new successor and return the successor node """
         if inp in self.successors:
-            out = self.successors[inp][0]
+            out, nxt = self.successors[inp]
             if out != output:
                 raise Exception(
                     f"observation not consistent with tree with output from tree: {out} and output from call: {output}")
-            return self.successors[inp][1]
+            return nxt
         successor_node = MealyNode(parent=self)
-        if self.successors == {} and self.parent is not None and self not in basis and self not in frontier:
-            if len(self.parent.successors) == 1 and self.parent.parent is not None and self.parent not in basis and self.parent not in frontier:
-                if  self.parent.parent not in basis and self.parent.parent not in frontier:
-                    new_self = CompressedMealyNode([(self.parent.id, self.parent.parent.get_output(self.parent.input_to_parent), self.input_to_parent), (self.id, self.parent.get_output(self.input_to_parent), inp), (successor_node.id, output, None)], self.parent)
+        if ( self.successors == {} 
+            and self.parent is not None 
+            and self not in basis 
+            and self not in frontier):
+            parent_node = self.parent
+            if (len(parent_node.successors) == 1 
+                and parent_node.parent is not None 
+                and parent_node not in basis 
+                and parent_node not in frontier 
+                and type(parent_node) != CompressedMealyNode):
+                grandparent_node = parent_node.parent
+                if  grandparent_node not in basis and grandparent_node not in frontier:
+                    if type(grandparent_node) == CompressedMealyNode:
+                        parent_output = grandparent_node.get_output(parent_node.input_to_parent, len(grandparent_node.nodes)-1)
+                    else:
+                        parent_output = grandparent_node.get_output(parent_node.input_to_parent)
+                    new_self = CompressedMealyNode(
+                            [(parent_node.id, parent_output, self.input_to_parent), 
+                            (self.id, parent_node.get_output(parent_node.input_to_parent), inp), 
+                            (successor_node.id, output, None)], 
+                        parent_node)
+                    
                     new_self.input_to_parent = self.parent.input_to_parent
-                    self.parent.parent.successors[self.parent.input_to_parent] = (self.parent.parent.get_output(self.parent.input_to_parent), new_self)
+                    self.parent.parent.successors[parent_node.input_to_parent] = (parent_output, new_self)
                     return new_self
-        self.add_successor(inp, output, successor_node)
         successor_node.input_to_parent = inp
-        return successor_node
+        self.add_successor(inp, output, successor_node)
+        return self.successors[inp][1]
 
     @property
     def id_counter(self):
@@ -188,7 +206,7 @@ class CompressedMealyNode:
                 return self.add_sucessor_end(inp, output, successor_node)
             
         else:
-            self.add_successor(inp, output, successor_node, index)
+            self.add_successor_middle(inp, output, successor_node, index)
             return successor_node
         
     def get_input_to_parent(self, index):
@@ -269,7 +287,7 @@ class ObservationTree:
                 counter += 1
             else:
                 counter = 0
-                if type(current_node) == MealyNode: current_node.extend_and_get(input_val, output_val, self.basis, self.frontier_to_basis_dict.keys())
+                if type(current_node) == MealyNode: current_node = current_node.extend_and_get(input_val, output_val, self.basis, self.frontier_to_basis_dict.keys())
                 else: current_node = current_node.extend_and_get(input_val, output_val)
 
     def get_observation(self, inputs):
@@ -340,13 +358,15 @@ class ObservationTree:
         counter = 0
         for input_val in inputs:
             if type(current_node) == CompressedMealyNode:
-                current_node = current_node.get_successor(input_val, counter)
+                if counter >= len(current_node.nodes):
+                    raise Exception("Counter exceeds the length of the compressed node", current_node.nodes, current_node.successors, input_val, inputs, counter)
+                successor_node = current_node.get_successor(input_val, counter)
                 counter += 1
             else:
                 counter = 0
                 successor_node = current_node.get_successor(input_val)
             if successor_node is None:
-                return None
+                return (None, None)
             current_node = successor_node
         if type(current_node) != CompressedMealyNode:
             counter = None
@@ -357,8 +377,7 @@ class ObservationTree:
         transfer_sequence = []
         current_node = to_node
         counter = -1
-
-        while current_node != from_node:
+        while current_node.id != from_node.id:
             if type(current_node) == CompressedMealyNode:
                 if counter == -1:
                     counter = len(current_node.nodes) - 1
@@ -428,8 +447,10 @@ class ObservationTree:
         Checks for basis candidates (basis states with the same behavior) for each frontier state.
         If a frontier state and a basis state are "apart", the basis state is removed from the basis list.
         """
-
         for frontier_state, basis_list in self.frontier_to_basis_dict.items():
+            if type(frontier_state) == CompressedMealyNode: Exception("Frontier state is compressed", frontier_state.nodes, self.frontier_to_basis_dict)
+            for basis_state in basis_list: 
+                if type(basis_state) == CompressedMealyNode: Exception("Basis state is compressed", basis_state.nodes, self.frontier_to_basis_dict)
             self.frontier_to_basis_dict[frontier_state] = [
                 basis_state for basis_state in basis_list
                 if not Apartness.states_are_apart(frontier_state, basis_state, self)]
@@ -629,7 +650,6 @@ class ObservationTree:
             inputs, outputs = self._identify_frontier_sepseq(frontier_state)
         else:
             inputs, outputs = self._identify_frontier_ads(frontier_state)
-
         self.insert_observation(inputs, outputs)
         self.update_basis_candidates(frontier_state)
         if len(self.frontier_to_basis_dict.get(frontier_state)) == old_candidate_size:
@@ -700,6 +720,7 @@ class ObservationTree:
 
     def construct_hypothesis(self):
         # Construct a hypothesis (Mealy Machine) based on the observation tree
+        
         self.construct_hypothesis_states()
         self.construct_hypothesis_transitions()
 
@@ -710,6 +731,43 @@ class ObservationTree:
         hypothesis.characterization_set = hypothesis.compute_characterization_set(raise_warning=False)
 
         return hypothesis
+
+    def walk(self, node, chain=0):
+
+        if type(node) == CompressedMealyNode:
+            children = [
+                type(succ).__name__
+                for _, (_, succ) in node.successors.items()
+            ]
+
+            print("CompressedMealyNode",
+                  "len(nodes)=", len(node.nodes),
+                  "children=", children)
+
+            for _, (_, succ) in node.successors.items():
+                self.walk(succ, 0)
+
+        elif type(node) == MealyNode:
+
+            if len(node.successors) == 1:
+                chain += 1
+            else:
+                if chain > 1:
+                    print("MEALY CHAIN LENGTH =", chain)
+                chain = 0
+
+            children = [
+                type(succ).__name__
+                for _, (_, succ) in node.successors.items()
+            ]
+
+            print("MealyNode",
+                  "successors=", len(node.successors),
+                  "children=", children)
+
+            for _, (_, succ) in node.successors.items():
+                self.walk(succ, chain)
+
 
     def build_hypothesis(self):
         # Builds the hypothesis which will be sent to the SUL and checks consistency
@@ -759,11 +817,9 @@ class ObservationTree:
         """
         use binary search on the counter example to compute a witness between the real system and the hypothesis
         """
-        tree_node = self.get_successor_index(cex_inputs)
-        if tree_node[1] is not None:
-            tree_node = tree_node[0].uncompress_node_at_index(tree_node[1])
-        else:
-            tree_node = tree_node[0]
+        tree_node, index = self.get_successor_index(cex_inputs)
+        if index is not None:
+            tree_node = tree_node.uncompress_node_at_index(index)
         self.update_frontier_and_basis()
 
         if tree_node in self.frontier_to_basis_dict or tree_node in self.basis:
@@ -807,11 +863,9 @@ class ObservationTree:
 
         self.insert_observation(query_inputs, query_outputs)
 
-        tree_node_p = self.get_successor_index(sigma1)
-        if tree_node_p[1] is not None:
-            tree_node_p = tree_node_p[0].uncompress_node_at_index(tree_node_p[1])
-        else:
-            tree_node_p = tree_node_p[0]
+        tree_node_p, index = self.get_successor_index(sigma1)
+        if index is not None:
+            tree_node_p = tree_node_p.uncompress_node_at_index(index)
 
         witness_p = Apartness.compute_witness(tree_node_p, hyp_node_p, self)
 
