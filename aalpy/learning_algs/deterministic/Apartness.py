@@ -4,6 +4,8 @@ from collections import deque
 class Apartness:
     @staticmethod
     def compute_witness(state1, state2, ob_tree):
+        if state1 is None or state2 is None: 
+            raise ValueError("States cannot be None")
         # Finds a distinguishing sequence between two states if they are apart based on the observation tree
         if ob_tree.automaton_type == 'mealy':
             state1_destination = Apartness._show_states_are_apart_mealy(
@@ -26,22 +28,38 @@ class Apartness:
     @staticmethod
     def _show_states_are_apart_mealy(first, second, alphabet):
         # Identifies if two states can be distinguished by any input-output pair in the provided alphabet
-        pairs = deque([(first, second)])
-        if type(first) == tuple: print(first)
+        if first is None or second is None:
+            raise ValueError("States cannot be None")
+        pairs = deque([(first, second, 0, 0)])
+        # if type(first) == tuple: print(first)
 
         while pairs:
-            first_node, second_node = pairs.popleft()
+            first_node, second_node, counter_one, counter_two = pairs.popleft()
             for input_val in alphabet:
-                if type(first_node) == tuple: print(first_node)
-                first_output = first_node.get_output(input_val)
-                second_output = second_node.get_output(input_val)
+                #if type(first_node) == tuple: print(first_node)
+                if hasattr(first_node, "nodes"): 
+                    first_output, _ = first_node.get_output(input_val, counter_one)
+                else: 
+                    first_output = first_node.get_output(input_val)
+                if hasattr(second_node, "nodes"): 
+                    second_output, _ = second_node.get_output(input_val, counter_two)
+                else:
+                    second_output = second_node.get_output(input_val)
 
                 if first_output is not None and second_output is not None:
                     if first_output != second_output:
-                        return first_node.get_successor(input_val)
-
-                    pairs.append((first_node.get_successor(
-                        input_val), second_node.get_successor(input_val)))
+                        if hasattr(first_node, "nodes"):
+                            return first_node.get_successor(input_val, counter_one)[0]
+                        else: return first_node.get_successor(input_val)
+                    
+                    
+                    if hasattr(first_node, "nodes"):
+                        first_successor, counter_one = first_node.get_successor(input_val, counter_one)
+                    else: first_successor = first_node.get_successor(input_val)
+                    if hasattr(second_node, "nodes"):
+                        second_successor, counter_two = second_node.get_successor(input_val, counter_two)
+                    else: second_successor = second_node.get_successor(input_val)
+                    pairs.append((first_successor, second_successor, counter_one, counter_two))
 
         return None
 
@@ -80,21 +98,27 @@ class Apartness:
         Determines if the observation tree and the hypothesis are distinguishable based on their state outputs
         """
         pairs = deque([(ob_tree_state, hyp_state)])
-
+        counter = 0
         while pairs:
             tree_state, hyp_state = pairs.popleft()
 
             for input_val in ob_tree.alphabet:
-                tree_output = tree_state.get_output(input_val)
+                if hasattr(tree_state, "nodes"): 
+                    tree_output, _ = tree_state.get_output(input_val, counter)
+                else: 
+                    tree_output = tree_state.get_output(input_val)
 
                 if tree_output is not None and input_val in hyp_state.output_fun:
                     hyp_output = hyp_state.output_fun[input_val]
+
+                    if hasattr(tree_state, "nodes"):
+                        tree_dest, counter = tree_state.get_successor(input_val, counter)
+                    else: tree_dest = tree_state.get_successor(input_val)
+
                     if tree_output != hyp_output:
-                        tree_dest = tree_state.get_successor(input_val)
                         return ob_tree.get_transfer_sequence(ob_tree_state, tree_dest)
 
-                    pairs.append((tree_state.get_successor(
-                        input_val), hyp_state.transitions[input_val]))
+                    pairs.append((tree_dest, hyp_state.transitions[input_val]))
 
         return None
 
