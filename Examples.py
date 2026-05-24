@@ -32,7 +32,7 @@ def random_deterministic_model_example_lsharp():
     import random
 
     model_type = 'mealy'  # or 'moore', 'dfa'
-    random.seed(50)
+    #random.seed(50)
 
     # for random dfa's you can also define num_accepting_states
     random_model = generate_random_deterministic_automata(automaton_type=model_type, num_states=20,

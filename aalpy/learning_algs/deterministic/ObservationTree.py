@@ -137,7 +137,6 @@ class CompressedMealyNode:
 
     def add_successor_middle(self, input_val, output_val, successor_node, index):
         """ Adds a successor node to the middle of the compressed node based on input """
-        #@TODO: why is index always zero????
         if len(self.nodes[index+1:]) > 1: #if there are multiple nodes after the split
             split_node = CompressedMealyNode(self.nodes[index+1:], self)
             old_successors = dict(self.successors)
@@ -211,7 +210,7 @@ class CompressedMealyNode:
             
         else:
             self.add_successor_middle(inp, output, successor_node, index)
-            return successor_node
+            return (successor_node, 0)
         
     def get_input_to_parent(self, index):
         """ Returns the input to the parent for the given index """
@@ -291,9 +290,8 @@ class ObservationTree:
         for input_val, output_val in zip(inputs, outputs):
             if type(current_node) == CompressedMealyNode:
                 current_node, counter = current_node.extend_and_get(input_val, output_val, counter)
-            else:
-                if type(current_node) == MealyNode: current_node, counter = current_node.extend_and_get(input_val, output_val, self.basis, self.frontier_to_basis_dict.keys())
-                else: current_node = current_node.extend_and_get(input_val, output_val)
+            elif type(current_node) == MealyNode: current_node, counter = current_node.extend_and_get(input_val, output_val, self.basis, self.frontier_to_basis_dict.keys())
+            else: current_node = current_node.extend_and_get(input_val, output_val)
 
     def get_observation(self, inputs):
         # Retrieve the list of outputs based on a given input sequence
@@ -823,12 +821,12 @@ class ObservationTree:
 
         if tree_node in self.frontier_to_basis_dict or tree_node in self.basis:
             return
-
+        
         hyp_state = self._get_automaton_successor(
             hypothesis, hypothesis.initial_state, cex_inputs)
         hyp_node = list(self.states_dict.keys())[list(
             self.states_dict.values()).index(hyp_state)]
-
+        
         prefix = []
         current_state = self.root
         counter = 0

@@ -35,6 +35,7 @@ class Apartness:
 
         while pairs:
             first_node, second_node, counter_one, counter_two = pairs.popleft()
+            next_counter_one, next_counter_two = counter_one, counter_two
             for input_val in alphabet:
                 #if type(first_node) == tuple: print(first_node)
                 if hasattr(first_node, "nodes"): 
@@ -54,12 +55,12 @@ class Apartness:
                     
                     
                     if hasattr(first_node, "nodes"):
-                        first_successor, counter_one = first_node.get_successor(input_val, counter_one)
+                        first_successor, next_counter_one = first_node.get_successor(input_val, counter_one)
                     else: first_successor = first_node.get_successor(input_val)
                     if hasattr(second_node, "nodes"):
-                        second_successor, counter_two = second_node.get_successor(input_val, counter_two)
+                        second_successor, next_counter_two = second_node.get_successor(input_val, counter_two)
                     else: second_successor = second_node.get_successor(input_val)
-                    pairs.append((first_successor, second_successor, counter_one, counter_two))
+                    pairs.append((first_successor, second_successor, next_counter_one, next_counter_two))
 
         return None
 
@@ -97,11 +98,10 @@ class Apartness:
         """
         Determines if the observation tree and the hypothesis are distinguishable based on their state outputs
         """
-        pairs = deque([(ob_tree_state, hyp_state)])
-        counter = 0
+        pairs = deque([(ob_tree_state, hyp_state, 0)])
         while pairs:
-            tree_state, hyp_state = pairs.popleft()
-
+            tree_state, hyp_state, counter = pairs.popleft()
+            next_counter = counter
             for input_val in ob_tree.alphabet:
                 if hasattr(tree_state, "nodes"): 
                     tree_output, _ = tree_state.get_output(input_val, counter)
@@ -112,13 +112,13 @@ class Apartness:
                     hyp_output = hyp_state.output_fun[input_val]
 
                     if hasattr(tree_state, "nodes"):
-                        tree_dest, counter = tree_state.get_successor(input_val, counter)
+                        tree_dest, next_counter = tree_state.get_successor(input_val, counter)
                     else: tree_dest = tree_state.get_successor(input_val)
 
                     if tree_output != hyp_output:
                         return ob_tree.get_transfer_sequence(ob_tree_state, tree_dest)
 
-                    pairs.append((tree_dest, hyp_state.transitions[input_val]))
+                    pairs.append((tree_dest, hyp_state.transitions[input_val], next_counter))
 
         return None
 
