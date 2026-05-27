@@ -139,8 +139,7 @@ class CompressedMealyNode:
         """ Adds a successor node to the middle of the compressed node based on input """
         if len(self.nodes[index+1:]) > 1: #if there are multiple nodes after the split
             split_node = CompressedMealyNode(self.nodes[index+1:], self)
-            old_successors = dict(self.successors)
-            split_node.successors = old_successors
+            split_node.successors = self.successors.copy()
             self.successors.clear()
             split_node.input_to_parent = self.nodes[index][2]
             self.successors[self.nodes[index][2]] = (self.nodes[-1][1], split_node)
@@ -148,9 +147,7 @@ class CompressedMealyNode:
         else: #if there is only one node after the split
             split_node = MealyNode(self, id=self.nodes[index+1][0])
             split_node.input_to_parent = self.nodes[index][2]
-            split_node.successors = self.successors
-            old_successors = dict(self.successors)
-            split_node.successors = old_successors
+            split_node.successors = self.successors.copy()
             self.successors.clear()
             self.successors[split_node.input_to_parent] = (self.nodes[index+1][1], split_node)
         
@@ -166,7 +163,7 @@ class CompressedMealyNode:
             self.nodes[-1] = (self.nodes[-1][0], self.nodes[-1][1], None)
             self.successors[input_val] = (output_val, successor_node)
 
-    def add_sucessor_end(self, input_val, output_val, successor_node):
+    def add_successor_end(self, input_val, output_val, successor_node):
         """ Adds a successor node to the end of the compressed node based on input """
         if self.successors == {}:
             self.nodes[-1] = (self.nodes[-1][0], self.nodes[-1][1], input_val)
@@ -206,7 +203,7 @@ class CompressedMealyNode:
                         f"observation not consistent with tree with output from tree: {out} and output from call: {output}")
                 return (self.successors[inp][1], index+1)
             else:
-                return self.add_sucessor_end(inp, output, successor_node)
+                return self.add_successor_end(inp, output, successor_node)
             
         else:
             self.add_successor_middle(inp, output, successor_node, index)
@@ -233,22 +230,22 @@ class CompressedMealyNode:
         if index < len(self.nodes) - 1:
             if len(self.nodes[index+1:]) > 1: #if there are multiple nodes after the split
                 successor_node = CompressedMealyNode(self.nodes[index+1:], uncompressed_node)
-                old_successors = self.successors
-                successor_node.successors = old_successors
-                successor_node.input_to_parent, _ = self.get_input_to_parent(index+1)
+                
                 
             else: #if there is only one node after the split
                 successor_node = MealyNode(uncompressed_node, id=self.nodes[index+1][0])
-                successor_node.input_to_parent, _ = self.get_input_to_parent(index+1)
-            uncompressed_node.successors[self.nodes[index][2]] = (self.nodes[-1][1], successor_node)
+            successor_node.successors = self.successors.copy()
+            successor_node.input_to_parent, _ = self.get_input_to_parent(index+1)
+            uncompressed_node.successors[self.get_input_to_parent(index)] = (self.nodes[index+1][1], successor_node)
         else:
-            old_successors = self.successors
-            uncompressed_node.successors = old_successors
+            uncompressed_node.successors = self.successors.copy()
+        
         if index == 0:
             if self.parent is not None:
                 parent_out, _ = self.parent.successors[self.input_to_parent]
                 self.parent.successors[self.input_to_parent] = (parent_out, uncompressed_node)
         else:
+            self.nodes = self.nodes[:index]
             self.successors.clear()
             self.successors[uncompressed_node.input_to_parent] = (self.nodes[index][1], uncompressed_node)
         return uncompressed_node
@@ -731,43 +728,6 @@ class ObservationTree:
 
         return hypothesis
 
-    def walk(self, node, chain=0):
-
-        if type(node) == CompressedMealyNode:
-            children = [
-                type(succ).__name__
-                for _, (_, succ) in node.successors.items()
-            ]
-
-            print("CompressedMealyNode",
-                  "len(nodes)=", len(node.nodes),
-                  "children=", children)
-
-            for _, (_, succ) in node.successors.items():
-                self.walk(succ, 0)
-
-        elif type(node) == MealyNode:
-
-            if len(node.successors) == 1:
-                chain += 1
-            else:
-                if chain > 1:
-                    print("MEALY CHAIN LENGTH =", chain)
-                chain = 0
-
-            children = [
-                type(succ).__name__
-                for _, (_, succ) in node.successors.items()
-            ]
-
-            print("MealyNode",
-                  "successors=", len(node.successors),
-                  "children=", children)
-
-            for _, (_, succ) in node.successors.items():
-                self.walk(succ, chain)
-
-
     def build_hypothesis(self):
         # Builds the hypothesis which will be sent to the SUL and checks consistency
         while True:
@@ -856,7 +816,7 @@ class ObservationTree:
         else: witness = Apartness.compute_witness(tree_node, hyp_node, self, index)
         
         if witness is None:
-            print("ERROR: NO WITNESS, tree_node access sequence:", self.get_access_sequence(tree_node), "tree_node successors:", tree_node.successors, "hyp_node access sequence:", self.get_access_sequence(hyp_node), "hyp_node successors:", hyp_node.successors,)
+            #print("ERROR: NO WITNESS, tree_node access sequence:", self.get_access_sequence(tree_node), "tree_node successors:", tree_node.successors, "hyp_node access sequence:", self.get_access_sequence(hyp_node), "hyp_node successors:", hyp_node.successors,)
             raise RuntimeError("Binary search: There should be a witness")
 
         query_inputs = hyp_p_access + sigma2 + witness

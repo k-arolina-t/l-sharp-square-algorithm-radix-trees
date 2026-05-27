@@ -19,7 +19,7 @@ print("Initial successors:", root.successors)
 # Test add_sucessor_end
 print("\n--- Testing add_sucessor_end ---")
 dummy_successor = MealyNode()
-result = root.add_sucessor_end("c", "out_c", dummy_successor)
+result = root.add_successor_end("c", "out_c", dummy_successor)
 
 print("Nodes after add_sucessor_end:", root.nodes)
 print("Successors after add_sucessor_end:", root.successors)
