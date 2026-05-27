@@ -223,7 +223,6 @@ class CompressedMealyNode:
         else: return self
 
     def uncompress_node_at_index(self,index):
-        if self.nodes == []: print("wtf")
         """ Uncompresses the node at the given index and returns that node """
         uncompressed_node = MealyNode(self.get_parent(index), id=self.nodes[index][0])
         uncompressed_node.input_to_parent, _ = self.get_input_to_parent(index)
@@ -816,6 +815,7 @@ class ObservationTree:
         """
         tree_node, index = self.get_successor_index(cex_inputs)
         if index is not None:
+            print(tree_node.successors, tree_node.nodes, index)
             tree_node = tree_node.uncompress_node_at_index(index)
         self.update_frontier_and_basis()
 
@@ -851,7 +851,7 @@ class ObservationTree:
 
         witness = Apartness.compute_witness(tree_node, hyp_node, self)
         if witness is None:
-            print(self.get_access_sequence(tree_node), tree_node.successors, self.get_access_sequence(hyp_node), hyp_node.successors)
+            print("ERROR: NO WITNESS, tree_node access sequence:", self.get_access_sequence(tree_node), "tree_node successors:", tree_node.successors, "hyp_node access sequence:", self.get_access_sequence(hyp_node), "hyp_node successors:", hyp_node.successors)
             raise RuntimeError("Binary search: There should be a witness")
 
         query_inputs = hyp_p_access + sigma2 + witness
