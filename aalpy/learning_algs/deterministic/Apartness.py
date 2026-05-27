@@ -33,9 +33,12 @@ class Apartness:
         pairs = deque([(first, second, index, 0)])
         # if type(first) == tuple: print(first)
 
+        print("START OF WITNESS CYCLE:", first.successors, second.successors, index)
+
         while pairs:
             first_node, second_node, counter_one, counter_two, = pairs.popleft()
             next_counter_one, next_counter_two = counter_one, counter_two
+            print("APARTNESS PAIRS:", first_node.successors, second_node.successors, counter_one, counter_two)
             for input_val in alphabet:
                 #if type(first_node) == tuple: print(first_node)
                 if hasattr(first_node, "nodes"): 
@@ -46,6 +49,8 @@ class Apartness:
                     second_output, _ = second_node.get_output(input_val, counter_two)
                 else:
                     second_output = second_node.get_output(input_val)
+
+                print(input_val, "outputs:", first_output, second_output)
 
                 if first_output is not None and second_output is not None:
                     if first_output != second_output:

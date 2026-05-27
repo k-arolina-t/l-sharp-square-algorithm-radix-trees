@@ -219,7 +219,9 @@ class CompressedMealyNode:
 
     def get_parent(self, index):
         """ Returns the parent for the given index """
-        if index == 0: return self.parent
+        if index == 0: 
+            if self.parent is not None: return self.parent
+            else: raise Exception("ORPHAN :(", self.nodes, self.successors, self.input_to_parent)
         else: return self
 
     def uncompress_node_at_index(self,index):
@@ -396,12 +398,12 @@ class ObservationTree:
         counter = None
 
         while current_node != self.root:
-            if type(current_node) == CompressedMealyNode: #@TODO does not transition into next node
+            if type(current_node) == CompressedMealyNode:
                 if counter == None:
                     counter = len(current_node.nodes) - 1
                 next_input, next_counter = current_node.get_input_to_parent(counter)
                 transfer_sequence.append(next_input)
-                current_node = current_node.get_parent(counter) #tuto bude problem
+                current_node = current_node.get_parent(counter)
                 counter = next_counter
             else:
                 if current_node.parent is None:
@@ -847,12 +849,14 @@ class ObservationTree:
             self.states_dict.values()).index(hyp_state_p)]
         hyp_p_access = self.get_transfer_sequence(self.root, hyp_node_p)
 
+        if index is not None:
+            print(tree_node.successors, tree_node.nodes, index)
 
         if index == None: witness = Apartness.compute_witness(tree_node, hyp_node, self)
         else: witness = Apartness.compute_witness(tree_node, hyp_node, self, index)
         
         if witness is None:
-            print(self.get_access_sequence(tree_node), tree_node.successors, self.get_access_sequence(hyp_node), hyp_node.successors)
+            print("ERROR: NO WITNESS, tree_node access sequence:", self.get_access_sequence(tree_node), "tree_node successors:", tree_node.successors, "hyp_node access sequence:", self.get_access_sequence(hyp_node), "hyp_node successors:", hyp_node.successors,)
             raise RuntimeError("Binary search: There should be a witness")
 
         query_inputs = hyp_p_access + sigma2 + witness
