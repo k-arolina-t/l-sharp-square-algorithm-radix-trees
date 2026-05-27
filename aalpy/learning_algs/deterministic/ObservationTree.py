@@ -815,8 +815,6 @@ class ObservationTree:
         use binary search on the counter example to compute a witness between the real system and the hypothesis
         """
         tree_node, index = self.get_successor_index(cex_inputs)
-        if index is not None:
-            tree_node = tree_node.uncompress_node_at_index(index)
         self.update_frontier_and_basis()
 
         if tree_node in self.frontier_to_basis_dict or tree_node in self.basis:
@@ -849,7 +847,10 @@ class ObservationTree:
             self.states_dict.values()).index(hyp_state_p)]
         hyp_p_access = self.get_transfer_sequence(self.root, hyp_node_p)
 
-        witness = Apartness.compute_witness(tree_node, hyp_node, self)
+
+        if index == None: witness = Apartness.compute_witness(tree_node, hyp_node, self)
+        else: witness = Apartness.compute_witness(tree_node, hyp_node, self, index)
+        
         if witness is None:
             print(self.get_access_sequence(tree_node), tree_node.successors, self.get_access_sequence(hyp_node), hyp_node.successors)
             raise RuntimeError("Binary search: There should be a witness")

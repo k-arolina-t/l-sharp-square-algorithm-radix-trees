@@ -3,13 +3,13 @@ from collections import deque
 
 class Apartness:
     @staticmethod
-    def compute_witness(state1, state2, ob_tree):
+    def compute_witness(state1, state2, ob_tree, index=0):
         if state1 is None or state2 is None: 
             raise ValueError("States cannot be None")
         # Finds a distinguishing sequence between two states if they are apart based on the observation tree
         if ob_tree.automaton_type == 'mealy':
             state1_destination = Apartness._show_states_are_apart_mealy(
-                state1, state2, ob_tree.alphabet)
+                state1, state2, ob_tree.alphabet, index)
         else:
             state1_destination = Apartness._show_states_are_apart_moore(
                 state1, state2, ob_tree.alphabet)
@@ -26,15 +26,15 @@ class Apartness:
             return Apartness._show_states_are_apart_moore(state1, state2, ob_tree.alphabet) is not None
 
     @staticmethod
-    def _show_states_are_apart_mealy(first, second, alphabet):
+    def _show_states_are_apart_mealy(first, second, alphabet, index=0):
         # Identifies if two states can be distinguished by any input-output pair in the provided alphabet
         if first is None or second is None:
             raise ValueError("States cannot be None")
-        pairs = deque([(first, second, 0, 0)])
+        pairs = deque([(first, second, index, 0)])
         # if type(first) == tuple: print(first)
 
         while pairs:
-            first_node, second_node, counter_one, counter_two = pairs.popleft()
+            first_node, second_node, counter_one, counter_two, = pairs.popleft()
             next_counter_one, next_counter_two = counter_one, counter_two
             for input_val in alphabet:
                 #if type(first_node) == tuple: print(first_node)
