@@ -135,33 +135,33 @@ class CompressedMealyNode:
     # def __hash__(self):
     #     return hash(self.id)
 
-    def add_successor_middle(self, input_val, output_val, successor_node, index):
+    def add_successor_middle(self, input_val, output_val, successor_node, index): #@TODO if index 0, successors of self become only the continuation of the compressed node, successor_node is lost
         """ Adds a successor node to the middle of the compressed node based on input """
-        if len(self.nodes[index+1:]) > 1: #if there are multiple nodes after the split
-            split_node = CompressedMealyNode(self.nodes[index+1:], self)
-            split_node.successors = self.successors.copy()
-            self.successors.clear()
-            split_node.input_to_parent = self.nodes[index][2]
-            self.successors[self.nodes[index][2]] = (self.nodes[-1][1], split_node)
+        #if len(self.nodes[index+1:]) > 1: #if there are multiple nodes after the split
+        split_node = CompressedMealyNode(self.nodes[index+1:], self)
+        split_node.successors = self.successors.copy()
+        self.successors.clear()
+        split_node.input_to_parent = self.nodes[index][2]
+        self.successors[self.nodes[index][2]] = (self.nodes[-1][1], split_node)
 
-        else: #if there is only one node after the split
-            split_node = MealyNode(self, id=self.nodes[index+1][0])
-            split_node.input_to_parent = self.nodes[index][2]
-            split_node.successors = self.successors.copy()
-            self.successors.clear()
-            self.successors[split_node.input_to_parent] = (self.nodes[index+1][1], split_node)
+        # else: #if there is only one node after the split
+        #     split_node = MealyNode(self, id=self.nodes[index+1][0])
+        #     split_node.input_to_parent = self.nodes[index][2]
+        #     split_node.successors = self.successors.copy()
+        #     self.successors.clear()
+        #     self.successors[split_node.input_to_parent] = (self.nodes[index+1][1], split_node)
         
         self.nodes = self.nodes[:index+1]
 
-        if len(self.nodes[:index+1]) == 1: #if there is only one node before the split
-            new_self = MealyNode(self.parent, id=self.nodes[0][0])
-            new_self.input_to_parent = self.input_to_parent
-            new_self.successors[input_val] = (output_val, successor_node)
-            if self.parent is not None:
-                self.parent.successors[self.input_to_parent] = (self.parent.get_output(self.input_to_parent), new_self)
-        else:
-            self.nodes[-1] = (self.nodes[-1][0], self.nodes[-1][1], None)
-            self.successors[input_val] = (output_val, successor_node)
+        # if len(self.nodes[:index+1]) == 1: #if there is only one node before the split
+        #     new_self = MealyNode(self.parent, id=self.nodes[0][0])
+        #     new_self.input_to_parent = self.input_to_parent
+        #     new_self.successors[input_val] = (output_val, successor_node)
+        #     if self.parent is not None:
+        #         self.parent.successors[self.input_to_parent] = (self.parent.get_output(self.input_to_parent), new_self)
+        # else:
+        self.nodes[-1] = (self.nodes[-1][0], self.nodes[-1][1], None)
+        self.successors[input_val] = (output_val, successor_node)
 
     def add_successor_end(self, input_val, output_val, successor_node):
         """ Adds a successor node to the end of the compressed node based on input """
@@ -216,13 +216,10 @@ class CompressedMealyNode:
 
     def get_parent(self, index):
         """ Returns the parent for the given index """
-        if index == 0: 
-            if self.parent is not None: return self.parent
-            else: raise Exception("ORPHAN :(", self.nodes, self.successors, self.input_to_parent)
+        if index == 0: return self.parent
         else: return self
 
     def uncompress_node_at_index(self,index):
-        if self.nodes == []: print("wtf")
         """ Uncompresses the node at the given index and returns that node """
         uncompressed_node = MealyNode(self.get_parent(index), id=self.nodes[index][0])
         uncompressed_node.input_to_parent, _ = self.get_input_to_parent(index)

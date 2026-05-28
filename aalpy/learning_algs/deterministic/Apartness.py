@@ -37,9 +37,9 @@ class Apartness:
 
         while pairs:
             first_node, second_node, counter_one, counter_two, = pairs.popleft()
-            next_counter_one, next_counter_two = counter_one, counter_two
             #print("APARTNESS PAIRS:", first_node.successors, second_node.successors, counter_one, counter_two)
             for input_val in alphabet:
+                next_counter_one, next_counter_two = counter_one, counter_two
                 if hasattr(first_node, "nodes"): 
                     first_output, _ = first_node.get_output(input_val, counter_one)
                 else: 
