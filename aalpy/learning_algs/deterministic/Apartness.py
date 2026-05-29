@@ -101,21 +101,27 @@ class Apartness:
         pairs = deque([(ob_tree_state, hyp_state, 0)])
         while pairs:
             tree_state, hyp_state, counter = pairs.popleft()
+            #print("COMPUTE WITNESS: ", tree_state, hyp_state, counter)
             next_counter = counter
             for input_val in ob_tree.alphabet:
                 if hasattr(tree_state, "nodes"): 
+                    #print("TREE STATE:", tree_state.nodes, tree_state.successors, input_val, counter, "HYP STATE:", hyp_state.transitions)
                     tree_output, _ = tree_state.get_output(input_val, counter)
                 else: 
+                    #print("TREE STATE:", tree_state.id, tree_state.successors, input_val, "HYP STATE:", hyp_state.transitions)
                     tree_output = tree_state.get_output(input_val)
 
+                #print("TREE OUTPUT: ", tree_output)
                 if tree_output is not None and input_val in hyp_state.output_fun:
                     hyp_output = hyp_state.output_fun[input_val]
+                    #print("HYP OUTPUT: ", hyp_output)
 
                     if hasattr(tree_state, "nodes"):
                         tree_dest, next_counter = tree_state.get_successor(input_val, counter)
                     else: tree_dest = tree_state.get_successor(input_val)
 
                     if tree_output != hyp_output:
+                        #print("WITNESS FOUND: ", ob_tree.get_transfer_sequence(ob_tree_state, tree_dest))
                         return ob_tree.get_transfer_sequence(ob_tree_state, tree_dest)
 
                     pairs.append((tree_dest, hyp_state.transitions[input_val], next_counter))
