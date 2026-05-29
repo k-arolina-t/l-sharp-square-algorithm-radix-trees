@@ -131,7 +131,6 @@ class CompressedMealyNode:
         self.successors = {}
         self.parent = parent
         self.input_to_parent = None
-        if (161, 'o2', None) in self.nodes: print("AAAA INIT: ", self.nodes, self.successors, index)
 
     # def __hash__(self):
     #     return hash(self.id)
@@ -179,7 +178,6 @@ class CompressedMealyNode:
 
     def get_successor(self, input_val, index):
         """ Returns the successor node for the given input """
-        if (161, 'o2', None) in self.nodes: print("AAAA: GET SUCC", self.nodes, self.successors, index)
         if index == len(self.nodes) - 1 and input_val in self.successors:
             return (self.successors[input_val][1], 0)
         elif input_val == self.nodes[index][2]:
@@ -188,7 +186,6 @@ class CompressedMealyNode:
 
     def get_output(self, input_val, index):
         """ Returns the output for the given input """
-        if (161, 'o2', None) in self.nodes: print("AAAA: GET OUTPUT", self.nodes, self.successors, index)
         if index == len(self.nodes) - 1 and input_val in self.successors:
             return (self.successors[input_val][0], 0)
         elif input_val == self.nodes[index][2]:
@@ -199,7 +196,6 @@ class CompressedMealyNode:
         """ Extend the node with a new successor and return the successor node """
         successor_node = MealyNode(parent=self)
         successor_node.input_to_parent = inp
-        if (161, 'o2', None) in self.nodes: print("AAAA: EXTEND AND GET", self.nodes, self.successors, inp, output, index, successor_node.id)
         
         if index == len(self.nodes) - 1:
             
@@ -218,13 +214,11 @@ class CompressedMealyNode:
         
     def get_input_to_parent(self, index):
         """ Returns the input to the parent for the given index """
-        if (161, 'o2', None) in self.nodes: print("AAAA: GET INPUT TO PARENT", self.nodes, self.successors, index)
         if index <= 0: return (self.input_to_parent, None)
         else: return (self.nodes[index-1][2], index-1)
 
     def get_parent(self, index):
         """ Returns the parent for the given index """
-        if (161, 'o2', None) in self.nodes: print("AAAA: GET PARENT", self.nodes, self.successors, index)
         if index == 0: return self.parent
         else: return self
 
@@ -232,7 +226,6 @@ class CompressedMealyNode:
         """ Uncompresses the node at the given index and returns that node """
         uncompressed_node = MealyNode(self.get_parent(index), id=self.nodes[index][0])
         uncompressed_node.input_to_parent, _ = self.get_input_to_parent(index)
-        if (161, 'o2', None) in self.nodes: print("AAAA: UNCOMPRESS NODE", self.nodes, self.successors, index)
         
         if index < len(self.nodes) - 1:
             if len(self.nodes[index+1:]) > 1: #if there are multiple nodes after the split
@@ -255,6 +248,8 @@ class CompressedMealyNode:
         else:
             self.successors.clear()
             self.successors[uncompressed_node.input_to_parent] = (self.nodes[index][1], uncompressed_node)
+            print(self.nodes)
+            uncompressed_node.parent = self
         return uncompressed_node
 
 class ObservationTree:
@@ -476,7 +471,6 @@ class ObservationTree:
             for i in self.alphabet:
                 maybe_frontier = basis_state.get_successor(i)
                 if type(maybe_frontier) == CompressedMealyNode:
-                    if (161, 'o2', None) in maybe_frontier.nodes: print("AAAA: CHECK FRONTIER CONSISTENCY", maybe_frontier.nodes, maybe_frontier.successors, i)
                     maybe_frontier = maybe_frontier.uncompress_node_at_index(0)
                     
                 if maybe_frontier is None or maybe_frontier in self.basis or maybe_frontier in self.frontier_to_basis_dict:
@@ -544,7 +538,6 @@ class ObservationTree:
             if basis_two == basis_state:
                 basis_two = next(iterator)
             if type(basis_two) == CompressedMealyNode:
-                if (161, 'o2', None) in basis_two.nodes: print("AAAA: EXPLORE FRONTIER", basis_two.nodes, basis_two.successors, basis_state.id, inp)
                 basis_two = basis_two.uncompress_node_at_index(0)
             witness = self.get_or_compute_witness(basis_state, basis_two)
             inputs = self.get_transfer_sequence(self.root, basis_state)
@@ -706,7 +699,6 @@ class ObservationTree:
                 successor = basis_state.get_successor(input_val)
                 if type(successor) == CompressedMealyNode:
                     successor = successor.uncompress_node_at_index(0)
-                    if (161, 'o2', None) in successor.nodes: print("AAAA CONSTRUCT HYPOTHESIS TRANSITIONS", successor.nodes, successor.successors, input_val)
                 if successor in self.frontier_to_basis_dict:
                     # set successor for frontier state
                     candidates = self.frontier_to_basis_dict[successor]
@@ -790,10 +782,9 @@ class ObservationTree:
         self.update_frontier_and_basis()
         tree_node, index = self.get_successor_index(cex_inputs)
         if index is not None:
-            #print(tree_node.successors, tree_node.nodes, index)
-            if (161, 'o2', None) in tree_node.nodes: print("AAAA BINARY SEARCH: ", tree_node.nodes, tree_node.successors, index)
+            if (161, 'o2', None) in tree_node.nodes: print("PreCompression: ", tree_node.nodes, tree_node.successors, index)
             tree_node = tree_node.uncompress_node_at_index(index)
-            print(tree_node.id, tree_node.successors, tree_node.parent.successors)
+            if tree_node.id == 160: print("PostCompression: ", tree_node.id, tree_node.parent.nodes, tree_node.successors['i3'][1].id, tree_node.parent.successors[tree_node.input_to_parent][1].id, tree_node.successors['i3'][1].parent.id)
         #print(tree_node.id, tree_node.successors)
         
 
