@@ -4,6 +4,7 @@ from shlex import split
 from .ADS import Ads
 from .Apartness import Apartness
 from ... import Dfa, DfaState, MealyState, MealyMachine, MooreMachine, MooreState
+import copy
 
 aut_type = ['dfa', 'mealy', 'moore']
 
@@ -224,33 +225,38 @@ class CompressedMealyNode:
 
     def uncompress_node_at_index(self,index):
         """ Uncompresses the node at the given index and returns that node """
-        uncompressed_node = MealyNode(self.get_parent(index), id=self.nodes[index][0])
-        uncompressed_node.input_to_parent, _ = self.get_input_to_parent(index)
-        
-        if index < len(self.nodes) - 1:
-            if len(self.nodes[index+1:]) > 1: #if there are multiple nodes after the split
-                successor_node = CompressedMealyNode(self.nodes[index+1:], uncompressed_node)
-                old_successors = self.successors
-                successor_node.successors = old_successors
-                successor_node.input_to_parent, _ = self.get_input_to_parent(index+1)
+        if len(self.nodes) == 1: return self
+        else:
+            if index == 0: 
+                uncompressed_node = MealyNode(self.parent, id=self.nodes[0][0])
+                uncompressed_node.input_to_parent = self.input_to_parent
+                self.parent.successors[uncompressed_node.input_to_parent] = (self.parent.get_output(self.input_to_parent), uncompressed_node)
+                uncompressed_node.successors[self.nodes[0][2]] = (self.nodes[1][1], self)
+                self.parent = uncompressed_node
+                self.input_to_parent = self.nodes[0][2]
+                self.nodes = self.nodes[1:]
                 
-            else: #if there is only one node after the split
-                successor_node = MealyNode(uncompressed_node, id=self.nodes[index+1][0])
-                successor_node.input_to_parent, _ = self.get_input_to_parent(index+1)
-            uncompressed_node.successors[self.nodes[index][2]] = (self.nodes[-1][1], successor_node)
-        else:
-            old_successors = self.successors
-            uncompressed_node.successors = old_successors
-        if index == 0:
-            if self.parent is not None:
-                parent_out, _ = self.parent.successors[self.input_to_parent]
-                self.parent.successors[self.input_to_parent] = (parent_out, uncompressed_node)
-        else:
-            self.successors.clear()
-            self.successors[uncompressed_node.input_to_parent] = (self.nodes[index][1], uncompressed_node)
-            print(self.nodes)
-            uncompressed_node.parent = self
-        return uncompressed_node
+            elif index == len(self.nodes) - 1: #@TODO: each successor needs to update parent in this case
+                uncompressed_node = MealyNode(self, id=self.nodes[-1][0])
+                uncompressed_node.input_to_parent = copy.deepcopy(self.nodes[-2][2])
+                uncompressed_node.successors = dict(self.successors)
+                self.successors.clear()
+                self.successors[uncompressed_node.input_to_parent] = (self.nodes[-1][1], uncompressed_node)
+                for succ in uncompressed_node.successors.values(): succ[1].parent = uncompressed_node
+                self.nodes = self.nodes[:-1]
+
+            else:
+                predecessor_node = CompressedMealyNode(self.nodes[:index], self.parent)
+                predecessor_node.input_to_parent = self.input_to_parent
+                self.parent.successors[predecessor_node.input_to_parent] = (self.parent.get_output(self.input_to_parent), predecessor_node)
+                uncompressed_node = MealyNode(predecessor_node, id=self.nodes[index][0])
+                uncompressed_node.input_to_parent = self.nodes[index-1][2]
+                predecessor_node.successors[uncompressed_node.input_to_parent] = (self.nodes[index][1], uncompressed_node)
+                uncompressed_node.successors[self.nodes[index][2]] = (self.nodes[index+1][1], self)
+                self.parent = uncompressed_node
+                self.input_to_parent = self.nodes[index][2]
+                self.nodes = self.nodes[index+1:]
+            return uncompressed_node
 
 class ObservationTree:
     def __init__(self, alphabet, sul, automaton_type, extension_rule, separation_rule):
@@ -782,9 +788,9 @@ class ObservationTree:
         self.update_frontier_and_basis()
         tree_node, index = self.get_successor_index(cex_inputs)
         if index is not None:
-            if (161, 'o2', None) in tree_node.nodes: print("PreCompression: ", tree_node.nodes, tree_node.successors, index)
+            #if (161, 'o2', None) in tree_node.nodes: print("PreCompression: ", tree_node.nodes, tree_node.successors, index)
             tree_node = tree_node.uncompress_node_at_index(index)
-            if tree_node.id == 160: print("PostCompression: ", tree_node.id, tree_node.parent.nodes, tree_node.successors['i3'][1].id, tree_node.parent.successors[tree_node.input_to_parent][1].id, tree_node.successors['i3'][1].parent.id)
+            #if tree_node.id == 160: print("PostCompression: ", tree_node.id, tree_node.parent.nodes, tree_node.successors['i3'][1].id, tree_node.parent.successors[tree_node.input_to_parent][1].id, tree_node.successors['i3'][1].parent.id)
         #print(tree_node.id, tree_node.successors)
         
 
