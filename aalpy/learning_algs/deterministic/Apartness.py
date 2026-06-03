@@ -36,18 +36,27 @@ class Apartness:
         while pairs:
             first_node, second_node, counter_one, counter_two = pairs.popleft()
             next_counter_one, next_counter_two = counter_one, counter_two
+            #if (first_node.id == 2 or first_node.id == 3 or second_node.id == 2 or second_node.id == 3):
             for input_val in alphabet:
                 #if type(first_node) == tuple: print(first_node)
                 if hasattr(first_node, "nodes"): 
                     first_output, _ = first_node.get_output(input_val, counter_one)
+                    # print("First node", first_node.nodes, "input:", input_val, "counter:", counter_one, "output:", first_output)
                 else: 
                     first_output = first_node.get_output(input_val)
+                    #print("First node", first_node.id, "input:", input_val, "output:", first_output)
                 if hasattr(second_node, "nodes"): 
                     second_output, _ = second_node.get_output(input_val, counter_two)
+                    # print("Second node", second_node.nodes, "input:", input_val, "counter:", counter_two, "output:", second_output)
                 else:
                     second_output = second_node.get_output(input_val)
+                    #print("Second node", second_node.id, "input:", input_val, "output:", second_output)
+
+                #if (first_node.id == 2 or first_node.id == 3 or second_node.id == 2 or second_node.id == 3):
+                    #print("input_val, outputs:", input_val, first_output, second_output)
 
                 if first_output is not None and second_output is not None:
+                    #if (first_node.id == 2 or first_node.id == 3 or second_node.id == 2 or second_node.id == 3): print(first_node.get_successor(input_val).id)
                     if first_output != second_output:
                         if hasattr(first_node, "nodes"):
                             return first_node.get_successor(input_val, counter_one)[0]
@@ -101,27 +110,29 @@ class Apartness:
         pairs = deque([(ob_tree_state, hyp_state, 0)])
         while pairs:
             tree_state, hyp_state, counter = pairs.popleft()
-            #print("COMPUTE WITNESS: ", tree_state, hyp_state, counter)
+            # if hasattr(tree_state, "nodes"): print("TREE_STATE:", tree_state.nodes, tree_state.successors, counter)
+            # else: print("TREE_STATE:", tree_state.id, tree_state.successors)
             next_counter = counter
             for input_val in ob_tree.alphabet:
                 if hasattr(tree_state, "nodes"): 
-                    #print("TREE STATE:", tree_state.nodes, tree_state.successors, input_val, counter, "HYP STATE:", hyp_state.transitions)
+                    # print("TREE STATE:", tree_state.nodes, tree_state.successors, input_val, counter, "HYP STATE:", hyp_state.transitions)
                     tree_output, _ = tree_state.get_output(input_val, counter)
                 else: 
-                    #print("TREE STATE:", tree_state.id, tree_state.successors, input_val, "HYP STATE:", hyp_state.transitions)
+                    # print("TREE STATE:", tree_state.id, tree_state.successors, input_val, "HYP STATE:", hyp_state.transitions)
                     tree_output = tree_state.get_output(input_val)
-
-                #print("TREE OUTPUT: ", tree_output)
+                print("First node", tree_state.id, "input:", input_val, "output:", tree_output)
+                print("Second node", hyp_state, "input:", input_val, "output:", hyp_state.output_fun[input_val])
+                # print("TREE OUTPUT: ", tree_output)
                 if tree_output is not None and input_val in hyp_state.output_fun:
                     hyp_output = hyp_state.output_fun[input_val]
-                    #print("HYP OUTPUT: ", hyp_output)
+                    # print("HYP OUTPUT: ", hyp_output)
 
                     if hasattr(tree_state, "nodes"):
                         tree_dest, next_counter = tree_state.get_successor(input_val, counter)
                     else: tree_dest = tree_state.get_successor(input_val)
 
                     if tree_output != hyp_output:
-                        #print("WITNESS FOUND: ", ob_tree.get_transfer_sequence(ob_tree_state, tree_dest))
+                        # print("WITNESS FOUND: ", ob_tree.get_transfer_sequence(ob_tree_state, tree_dest))
                         return ob_tree.get_transfer_sequence(ob_tree_state, tree_dest)
 
                     pairs.append((tree_dest, hyp_state.transitions[input_val], next_counter))
