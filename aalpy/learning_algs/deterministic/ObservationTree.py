@@ -58,7 +58,6 @@ class MealyNode:
             self.id = MealyNode._id_counter
         else:
             self.id = id
-            MealyNode._id_counter = max(MealyNode._id_counter, id)
         self.successors = {}
         self.parent = parent
         self.input_to_parent = None
@@ -112,7 +111,7 @@ class MealyNode:
                             (self.id, parent_node.get_output(self.input_to_parent), inp), 
                             (successor_node.id, output, None)], 
                         grandparent_node)
-                    print(new_self.nodes, grandparent_node.successors, type(grandparent_node))
+                    # print(new_self.nodes, grandparent_node.successors, type(grandparent_node))
                     new_self.input_to_parent = self.parent.input_to_parent
                     self.parent.parent.successors[parent_node.input_to_parent] = (parent_output, new_self)
                     return (new_self, len(new_self.nodes)-1)
@@ -141,6 +140,8 @@ class CompressedMealyNode:
         # if len(self.nodes[index+1:]) > 1: #if there are multiple nodes after the split
         split_node = CompressedMealyNode(self.nodes[index+1:], self)
         split_node.successors = dict(self.successors)
+        for succ in split_node.successors.values():
+            succ[1].parent = split_node
         self.successors.clear()
         split_node.input_to_parent = self.nodes[index][2]
         self.successors[self.nodes[index][2]] = (self.nodes[index+1][1], split_node)
@@ -196,23 +197,27 @@ class CompressedMealyNode:
 
     def extend_and_get(self, inp, output, index):
         """ Extend the node with a new successor and return the successor node """
-        successor_node = MealyNode(parent=self)
-        successor_node.input_to_parent = inp
-        
-        if index == len(self.nodes) - 1:
-            
+        if index < len(self.nodes) - 1:
+            if inp == self.nodes[index][2]:
+                out = self.nodes[index+1][1]
+                if out != output:
+                        raise Exception(f"observation not consistent with tree with output from tree: {out} and output from call: {output}")
+                return (self, index + 1)
+            else:
+                successor_node = MealyNode(parent=self)
+                successor_node.input_to_parent = inp
+                self.add_successor_middle(inp, output, successor_node, index)
+                return (successor_node, 0)
+        else:
             if inp in self.successors:
                 out = self.successors[inp][0]
                 if out != output:
-                    raise Exception(
-                        f"observation not consistent with tree with output from tree: {out} and output from call: {output}")
-                return (self.successors[inp][1], index+1)
+                        raise Exception(f"observation not consistent with tree with output from tree: {out} and output from call: {output}")
+                return (self.successors[inp][1], 0)
             else:
+                successor_node = MealyNode(parent=self)
+                successor_node.input_to_parent = inp
                 return self.add_sucessor_end(inp, output, successor_node)
-            
-        else:
-            self.add_successor_middle(inp, output, successor_node, index)
-            return (successor_node, 0)
         
     def get_input_to_parent(self, index):
         """ Returns the input to the parent for the given index """
@@ -255,15 +260,14 @@ class CompressedMealyNode:
                 self.successors.clear()
                 self.successors[uncompressed_node.input_to_parent] = (self.nodes[-1][1], uncompressed_node)
                 for succ in uncompressed_node.successors.values(): succ[1].parent = uncompressed_node
+                self.nodes[-2] = (self.nodes[-2][0], self.nodes[-2][1], None)
                 self.nodes = self.nodes[:-1]
 
             else:
                 predecessor_node = CompressedMealyNode(self.nodes[:index], self.parent)
                 predecessor_node.input_to_parent = self.input_to_parent
-                if type(self.parent) == CompressedMealyNode:
-                    self.parent.successors[predecessor_node.input_to_parent] = (self.parent.get_output(self.input_to_parent, len(self.parent.nodes)-1)[0], predecessor_node)
-                else:
-                    self.parent.successors[predecessor_node.input_to_parent] = (self.parent.get_output(self.input_to_parent)[0], predecessor_node)
+                predecessor_node.nodes[-1] = (predecessor_node.nodes[-1][0], predecessor_node.nodes[-1][1], None)
+                self.parent.successors[predecessor_node.input_to_parent] = (self.nodes[0][1], predecessor_node)                
                 uncompressed_node = MealyNode(predecessor_node, id=self.nodes[index][0])
                 uncompressed_node.input_to_parent = self.nodes[index-1][2]
                 predecessor_node.successors[uncompressed_node.input_to_parent] = (self.nodes[index][1], uncompressed_node)
@@ -410,6 +414,7 @@ class ObservationTree:
                     return None
                 transfer_sequence.append(current_node.input_to_parent)
                 current_node = current_node.parent
+                counter = None
 
         #print("end")
         transfer_sequence.reverse()
@@ -434,6 +439,7 @@ class ObservationTree:
                     return None
                 transfer_sequence.append(current_node.input_to_parent)
                 current_node = current_node.parent
+                counter = None
 
         transfer_sequence.reverse()
         return tuple(transfer_sequence)
@@ -443,9 +449,12 @@ class ObservationTree:
 
     def safe_uncompress_node(self, node, index):
         if type(node) == CompressedMealyNode:
+            #print("WE'RE HERE!!", self.frontier_to_basis_dict)
             new_node = node.uncompress_node_at_index(index)
             if node in self.frontier_to_basis_dict:
                 self.frontier_to_basis_dict[new_node] = self.frontier_to_basis_dict.pop(node)
+            if node in self.basis:
+                self.basis[self.basis.index(node)] = new_node
             return new_node
         else: return node
 
@@ -480,7 +489,7 @@ class ObservationTree:
             self.frontier_to_basis_dict[frontier_state] = [
                 basis_state for basis_state in basis_list
                 if not Apartness.states_are_apart(frontier_state, basis_state, self)]
-            print("FRONTIER TO BASIS UPDATE, frontier id, input_to_parent, successors:", frontier_state.id, frontier_state.input_to_parent, frontier_state.successors, "basis candidates:", [basis_state.id for basis_state in self.frontier_to_basis_dict.get(frontier_state)])
+            # print("FRONTIER TO BASIS UPDATE, frontier id, input_to_parent, successors:", frontier_state.id, frontier_state.input_to_parent, frontier_state.successors, "basis candidates:", [basis_state.id for basis_state in self.frontier_to_basis_dict.get(frontier_state)])
 
     def promote_frontier_state(self):
         """
@@ -489,7 +498,7 @@ class ObservationTree:
         for iso_frontier_state, basis_list in self.frontier_to_basis_dict.items():
             #print(iso_frontier_state.id, [basis_state.id for basis_state in basis_list])
             if not basis_list:
-                print("PROMOTION RULE, frontier id, input_to_parent, successors:", iso_frontier_state.id, iso_frontier_state.input_to_parent, iso_frontier_state.successors)
+                # print("PROMOTION RULE, frontier id, input_to_parent, successors:", iso_frontier_state.id, iso_frontier_state.input_to_parent, iso_frontier_state.successors)
                 new_basis = iso_frontier_state
                 self.basis.append(new_basis)
                 self.frontier_to_basis_dict.pop(new_basis)
@@ -544,10 +553,10 @@ class ObservationTree:
             for inp in self.alphabet:
                 if basis_state.get_successor(inp) is None:
                     self.explore_frontier(basis_state, inp)
-                    new_frontier = basis_state.get_successor(inp)
+                    new_frontier = self.safe_uncompress_node(basis_state.get_successor(inp), 0)
                     basis_candidates = self.find_basis_candidates(new_frontier)
                     self.frontier_to_basis_dict[new_frontier] = basis_candidates
-                    print("EXTENSION RULE, basis id, input_to_parent, successors:", basis_state.id, basis_state.input_to_parent, basis_state.successors, "new frontier id, input_to_parent, successors:", new_frontier.id, new_frontier.input_to_parent, new_frontier.successors, "basis candidates:", [candidate.id for candidate in basis_candidates])
+                    # print("EXTENSION RULE, basis id, input_to_parent, successors:", basis_state.id, basis_state.input_to_parent, basis_state.successors, "new frontier id, input_to_parent, successors:", new_frontier.id, new_frontier.input_to_parent, new_frontier.successors, "basis candidates:", [candidate.id for candidate in basis_candidates])
 
     def find_basis_candidates(self, new_frontier):
         return {
@@ -579,7 +588,7 @@ class ObservationTree:
             inputs.append(inp)
             inputs.extend(witness)
             outputs = self.sul.query(inputs)
-            print("ADD NEW OBSERVATION TO TREE:",inputs, outputs)
+            # print("ADD NEW OBSERVATION TO TREE:",inputs, outputs)
             self.insert_observation(inputs, outputs)
 
     def adaptive_output_query(self, prefix, infix, ads):
@@ -682,7 +691,7 @@ class ObservationTree:
             inputs, outputs = self._identify_frontier_ads(frontier_state)
         self.insert_observation(inputs, outputs)
         self.update_basis_candidates(frontier_state)
-        print("IDENTIFICATION RULE, frontier id, input_to_parent, successors:", frontier_state.id, frontier_state.input_to_parent, frontier_state.successors, "basis candidates after identification:", [candidate.id for candidate in self.frontier_to_basis_dict.get(frontier_state)])
+        # print("IDENTIFICATION RULE, frontier id, input_to_parent, successors:", frontier_state.id, frontier_state.input_to_parent, frontier_state.successors, "basis candidates after identification:", [candidate.id for candidate in self.frontier_to_basis_dict.get(frontier_state)])
         if len(self.frontier_to_basis_dict.get(frontier_state)) == old_candidate_size:
             # Just before: raise RuntimeError("Identification did not increase the norm")
             print(f"[DEBUG] Failed to identify frontier state: {frontier_state.id}")
@@ -776,11 +785,10 @@ class ObservationTree:
             counter_example = Apartness.compute_witness_in_tree_and_hypothesis_states(self, self.root, hypothesis.initial_state)
            
             if not counter_example:
-                print("EQUIVALENCE RULE: No counterexample found, hypothesis sent to SUL")
-                self.print_tree()
+                # print("EQUIVALENCE RULE: No counterexample found, hypothesis sent to SUL")
                 return hypothesis
-            else:
-                print("EQUIVALENCE RULE: Counterexample found, processing counterexample:", counter_example)
+            # else:
+                # print("EQUIVALENCE RULE: Counterexample found, processing counterexample:", counter_example)
 
             cex_outputs = self.get_observation(counter_example)
             self.process_counter_example(hypothesis, counter_example, cex_outputs)
@@ -802,7 +810,7 @@ class ObservationTree:
         input-output sequence which is different
         """
         self.insert_observation(cex_inputs, cex_outputs)
-        print(cex_inputs, cex_outputs)
+        # print(cex_inputs, cex_outputs)
         hyp_outputs = hypothesis.compute_output_seq(
             hypothesis.initial_state, cex_inputs)
         prefix_index = self._get_counter_example_prefix_index(
@@ -821,7 +829,7 @@ class ObservationTree:
         """
         use binary search on the counter example to compute a witness between the real system and the hypothesis
         """
-        print("BINARY SEARCH, cex inputs:", cex_inputs, "cex outputs:", cex_outputs)
+        # print("BINARY SEARCH, cex inputs:", cex_inputs, "cex outputs:", cex_outputs)
         #self.update_frontier_and_basis()
         tree_node, index = self.get_successor_index(cex_inputs)
         if index is not None:
@@ -862,7 +870,7 @@ class ObservationTree:
 
         witness = Apartness.compute_witness(tree_node, hyp_node, self)
         if witness is None:
-            print("ERROR: NO WITNESS, tree_node access sequence:", self.get_access_sequence(tree_node), "tree_node successors:", tree_node.successors, "hyp_node access sequence:", self.get_access_sequence(hyp_node), "hyp_node successors:", hyp_node.successors)
+            # print("ERROR: NO WITNESS, tree_node access sequence:", self.get_access_sequence(tree_node), "tree_node successors:", tree_node.successors, "hyp_node access sequence:", self.get_access_sequence(hyp_node), "hyp_node successors:", hyp_node.successors)
             raise RuntimeError("Binary search: There should be a witness")
 
         query_inputs = hyp_p_access + sigma2 + witness
@@ -887,69 +895,3 @@ class ObservationTree:
             automaton.current_state = automaton.current_state.transitions[inp]
 
         return automaton.current_state
-    
-    def print_tree(self):
-        """
-        Prints a highly readable, hierarchical view of the observation tree.
-        Supports standard Mealy nodes and unrolls Compressed Mealy nodes inline.
-        """
-        def _get_node_desc(n):
-            if hasattr(n, 'id'):
-                return str(n.id)
-            elif hasattr(n, 'nodes') and n.nodes:
-                return f"Compressed({n.nodes[0][0]}..{n.nodes[-1][0]})"
-            return "Unknown"
-
-        def _get_status_str(node):
-            status = []
-            if node == self.root:
-                status.append("Root")
-            if node in self.basis:
-                status.append("Basis")
-            elif node in self.frontier_to_basis_dict:
-                candidates = [_get_node_desc(c) for c in self.frontier_to_basis_dict[node]]
-                status.append(f"Frontier -> Candidates: {candidates}")
-            return f" [{', '.join(status)}]" if status else ""
-
-        def _print_node(node, indent=""):
-            if node is None:
-                return
-            
-            # 1. Handle Standard MealyNode
-            if type(node).__name__ == 'MealyNode':
-                status_str = _get_status_str(node)
-                print(f"Node {node.id}{status_str}")
-                
-                for inp, (out, succ) in node.successors.items():
-                    edge_str = f"{indent}└───({inp} / {out})───> "
-                    print(edge_str, end="")
-                    _print_node(succ, indent + " " * len(edge_str))
-            
-            # 2. Handle CompressedMealyNode
-            elif type(node).__name__ == 'CompressedMealyNode':
-                num_internal = len(node.nodes)
-                current_indent = indent
-                
-                for i in range(num_internal):
-                    sub_id, _, next_input = node.nodes[i]
-                    
-                    if i < num_internal - 1:
-                        # Fetch the output from the next node's entry in the chain
-                        next_output = node.nodes[i + 1][1]
-                        print(f"Node {sub_id} [Compressed Step]")
-                        edge_str = f"{current_indent}└───({next_input} / {next_output})───> "
-                        print(edge_str, end="")
-                        current_indent += " " * len(edge_str)
-                    else:
-                        # The final sub-node in the chain handles the actual outgoing branching transitions
-                        status_str = _get_status_str(node)
-                        print(f"Node {sub_id} [Compressed End]{status_str}")
-                        
-                        for inp, (out, succ) in node.successors.items():
-                            edge_str = f"{current_indent}└───({inp} / {out})───> "
-                            print(edge_str, end="")
-                            _print_node(succ, current_indent + " " * len(edge_str))
-
-        print(f"\n{'='*10} OBSERVATION TREE ({self.automaton_type.upper()}) {'='*10}")
-        _print_node(self.root)
-        print("=" * 50)
