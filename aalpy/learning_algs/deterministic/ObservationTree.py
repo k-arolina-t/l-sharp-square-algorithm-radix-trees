@@ -111,7 +111,6 @@ class MealyNode:
                             (self.id, parent_node.get_output(self.input_to_parent), inp), 
                             (successor_node.id, output, None)], 
                         grandparent_node)
-                    # print(new_self.nodes, grandparent_node.successors, type(grandparent_node))
                     new_self.input_to_parent = self.parent.input_to_parent
                     self.parent.parent.successors[parent_node.input_to_parent] = (parent_output, new_self)
                     return (new_self, len(new_self.nodes)-1)
@@ -401,22 +400,18 @@ class ObservationTree:
         while (current_node, from_index) != (from_node, counter):
             if type(current_node) == CompressedMealyNode:
                 if counter == None:
-                    #print(current_node.successors, current_node.nodes, current_node.input_to_parent, current_node.parent)
                     counter = len(current_node.nodes) - 1
                 next_node, new_counter = current_node.get_input_to_parent(counter)
                 transfer_sequence.append(next_node)
                 current_node = current_node.get_parent(counter)
                 counter = new_counter
             else:
-                #print("currentnode:",current_node.id, current_node.successors, current_node.input_to_parent, current_node.parent)
-                # if type(current_node.parent) == MealyNode: print("parent:",current_node.parent.id)
                 if current_node.parent is None:
                     return None
                 transfer_sequence.append(current_node.input_to_parent)
                 current_node = current_node.parent
                 counter = None
 
-        #print("end")
         transfer_sequence.reverse()
         return transfer_sequence
 
@@ -449,7 +444,6 @@ class ObservationTree:
 
     def safe_uncompress_node(self, node, index):
         if type(node) == CompressedMealyNode:
-            #print("WE'RE HERE!!", self.frontier_to_basis_dict)
             new_node = node.uncompress_node_at_index(index)
             if node in self.frontier_to_basis_dict:
                 self.frontier_to_basis_dict[new_node] = self.frontier_to_basis_dict.pop(node)
@@ -489,16 +483,13 @@ class ObservationTree:
             self.frontier_to_basis_dict[frontier_state] = [
                 basis_state for basis_state in basis_list
                 if not Apartness.states_are_apart(frontier_state, basis_state, self)]
-            # print("FRONTIER TO BASIS UPDATE, frontier id, input_to_parent, successors:", frontier_state.id, frontier_state.input_to_parent, frontier_state.successors, "basis candidates:", [basis_state.id for basis_state in self.frontier_to_basis_dict.get(frontier_state)])
 
     def promote_frontier_state(self):
         """
         Searches for an isolated frontier state and adds it to the basis states if it is not associated with another basis state
         """
         for iso_frontier_state, basis_list in self.frontier_to_basis_dict.items():
-            #print(iso_frontier_state.id, [basis_state.id for basis_state in basis_list])
             if not basis_list:
-                # print("PROMOTION RULE, frontier id, input_to_parent, successors:", iso_frontier_state.id, iso_frontier_state.input_to_parent, iso_frontier_state.successors)
                 new_basis = iso_frontier_state
                 self.basis.append(new_basis)
                 self.frontier_to_basis_dict.pop(new_basis)
@@ -556,7 +547,6 @@ class ObservationTree:
                     new_frontier = self.safe_uncompress_node(basis_state.get_successor(inp), 0)
                     basis_candidates = self.find_basis_candidates(new_frontier)
                     self.frontier_to_basis_dict[new_frontier] = basis_candidates
-                    # print("EXTENSION RULE, basis id, input_to_parent, successors:", basis_state.id, basis_state.input_to_parent, basis_state.successors, "new frontier id, input_to_parent, successors:", new_frontier.id, new_frontier.input_to_parent, new_frontier.successors, "basis candidates:", [candidate.id for candidate in basis_candidates])
 
     def find_basis_candidates(self, new_frontier):
         return {
@@ -588,7 +578,6 @@ class ObservationTree:
             inputs.append(inp)
             inputs.extend(witness)
             outputs = self.sul.query(inputs)
-            # print("ADD NEW OBSERVATION TO TREE:",inputs, outputs)
             self.insert_observation(inputs, outputs)
 
     def adaptive_output_query(self, prefix, infix, ads):
@@ -691,9 +680,7 @@ class ObservationTree:
             inputs, outputs = self._identify_frontier_ads(frontier_state)
         self.insert_observation(inputs, outputs)
         self.update_basis_candidates(frontier_state)
-        # print("IDENTIFICATION RULE, frontier id, input_to_parent, successors:", frontier_state.id, frontier_state.input_to_parent, frontier_state.successors, "basis candidates after identification:", [candidate.id for candidate in self.frontier_to_basis_dict.get(frontier_state)])
         if len(self.frontier_to_basis_dict.get(frontier_state)) == old_candidate_size:
-            # Just before: raise RuntimeError("Identification did not increase the norm")
             print(f"[DEBUG] Failed to identify frontier state: {frontier_state.id}")
             print(f"[DEBUG] Standard tree walk path matches insertion path? " f"{self.get_access_sequence(frontier_state)}")
             raise RuntimeError("Identification did not increase the norm")
@@ -709,8 +696,6 @@ class ObservationTree:
         inputs.extend(witness)
 
         outputs = self.sul.query(inputs)
-        # Just before: raise RuntimeError("Identification did not increase the norm")
-        #print(f"[DEBUG] Witness sequence used: {witness}")
 
         return inputs, outputs
 
@@ -785,10 +770,8 @@ class ObservationTree:
             counter_example = Apartness.compute_witness_in_tree_and_hypothesis_states(self, self.root, hypothesis.initial_state)
            
             if not counter_example:
-                # print("EQUIVALENCE RULE: No counterexample found, hypothesis sent to SUL")
                 return hypothesis
             # else:
-                # print("EQUIVALENCE RULE: Counterexample found, processing counterexample:", counter_example)
 
             cex_outputs = self.get_observation(counter_example)
             self.process_counter_example(hypothesis, counter_example, cex_outputs)
@@ -810,7 +793,6 @@ class ObservationTree:
         input-output sequence which is different
         """
         self.insert_observation(cex_inputs, cex_outputs)
-        # print(cex_inputs, cex_outputs)
         hyp_outputs = hypothesis.compute_output_seq(
             hypothesis.initial_state, cex_inputs)
         prefix_index = self._get_counter_example_prefix_index(
@@ -829,14 +811,10 @@ class ObservationTree:
         """
         use binary search on the counter example to compute a witness between the real system and the hypothesis
         """
-        # print("BINARY SEARCH, cex inputs:", cex_inputs, "cex outputs:", cex_outputs)
         #self.update_frontier_and_basis()
         tree_node, index = self.get_successor_index(cex_inputs)
         if index is not None:
-            #if (161, 'o2', None) in tree_node.nodes: print("PreCompression: ", tree_node.nodes, tree_node.successors, index)
-            tree_node = self.safe_uncompress_node(tree_node, index)
-            #if tree_node.id == 160: print("PostCompression: ", tree_node.id, tree_node.parent.nodes, tree_node.successors['i3'][1].id, tree_node.parent.successors[tree_node.input_to_parent][1].id, tree_node.successors['i3'][1].parent.id)
-        
+            tree_node = self.safe_uncompress_node(tree_node, index)        
 
         if tree_node in self.frontier_to_basis_dict or tree_node in self.basis:
             return
@@ -870,7 +848,6 @@ class ObservationTree:
 
         witness = Apartness.compute_witness(tree_node, hyp_node, self)
         if witness is None:
-            # print("ERROR: NO WITNESS, tree_node access sequence:", self.get_access_sequence(tree_node), "tree_node successors:", tree_node.successors, "hyp_node access sequence:", self.get_access_sequence(hyp_node), "hyp_node successors:", hyp_node.successors)
             raise RuntimeError("Binary search: There should be a witness")
 
         query_inputs = hyp_p_access + sigma2 + witness
